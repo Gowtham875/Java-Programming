@@ -1,0 +1,209 @@
+SOURCE CODE:
+
+package rma; 
+import java.util.*; 
+ 
+public class Order { 
+    private String orderId; 
+    private String buyer; 
+    private List<String> items; 
+    private double totalAmount; 
+    private Date purchaseDate; 
+ 
+    public Order(String orderId, String buyer, List<String> items, double totalAmount, Date 
+purchaseDate) { 
+        this.orderId = orderId; 
+        this.buyer = buyer; 
+        this.items = items; 
+        this.totalAmount = totalAmount; 
+        this.purchaseDate = purchaseDate; 
+    } 
+ 
+    public String getOrderId() { return orderId; } 
+    public String getBuyer() { return buyer; } 
+    public List<String> getItems() { return items; } 
+    public double getTotalAmount() { return totalAmount; } 
+    public Date getPurchaseDate() { return purchaseDate; } 
+ 
+    public void displayOrder() { 
+        System.out.println("Order ID: " + orderId + ", Buyer: " + buyer + ", Items: " + items + 
+                ", Total: " + totalAmount + ", Date: " + purchaseDate); 
+    } 
+} 
+Class ReturnRequest: 
+ 
+package rma; 
+ 
+public class ReturnRequest { 
+    private String rmaId; 
+    private String orderId; 
+    private String reason; 
+    private String condition; 
+    private String status;  
+ 
+    public ReturnRequest(String rmaId, String orderId, String reason, String condition) { 
+        this.rmaId = rmaId; 
+        this.orderId = orderId; 
+        this.reason = reason; 
+        this.condition = condition; 
+        this.status = "REQUESTED"; 
+    } 
+ 
+    public String getRmaId() { return rmaId; } 
+    public String getOrderId() { return orderId; } 
+    public String getReason() { return reason; } 
+    public String getCondition() { return condition; } 
+    public String getStatus() { return status; } 
+ 
+    public void approve() { this.status = "APPROVED"; } 
+    public void deny() { this.status = "DENIED"; } 
+    public void refund() { this.status = "REFUNDED"; } 
+ 
+    public void displayRequest() { 
+        System.out.println("RMA: " + rmaId + ", Order: " + orderId + ", Reason: " + reason + 
+                ", Condition: " + condition + ", Status: " + status); 
+    } 
+} 
+ 
+ 
+ 
+ 
+ 
+ 
+Class Refund: 
+ 
+package rma; 
+import java.util.*; 
+ 
+public class Refund { 
+    protected String refundId; 
+    protected String rmaId; 
+    protected String method; 
+    protected double amount; 
+    protected Date processedDate; 
+ 
+    public Refund(String refundId, String rmaId, String method, double amount) { 
+        this.refundId = refundId; 
+        this.rmaId = rmaId; 
+        this.method = method; 
+        this.amount = amount; 
+        this.processedDate = new Date(); 
+    } 
+ 
+    public void processRefund() { 
+        System.out.println("Refund processed via " + method + " for amount " + amount); 
+    } 
+} 
+ 
+Class CardRefund: 
+ 
+package rma; 
+ 
+public class CardRefund extends Refund { 
+    public CardRefund(String refundId, String rmaId, double amount) { 
+        super(refundId, rmaId, "Card", amount); 
+    } 
+ 
+    @Override 
+    public void processRefund() { 
+        System.out.println("Card refund of Rs." + amount + " processed successfully!"); 
+    } 
+} 
+ 
+Class WalletRefund: 
+ 
+package rma; 
+ 
+public class WalletRefund extends Refund { 
+    public WalletRefund(String refundId, String rmaId, double amount) { 
+        super(refundId, rmaId, "Wallet", amount); 
+    } 
+ 
+    @Override 
+    public void processRefund() { 
+        System.out.println("Wallet refund of Rs." + amount + " credited successfully!"); 
+    } 
+} 
+ 
+Class RMAService: 
+ 
+package rma; 
+import java.util.*; 
+ 
+public class RMAService { 
+    private List<Order> orders = new ArrayList<>(); 
+    private List<ReturnRequest> requests = new ArrayList<>(); 
+    private List<Refund> refunds = new ArrayList<>(); 
+ 
+    // Overloading → createRMA with/without condition 
+    public ReturnRequest createRMA(String rmaId, String orderId, String reason) { 
+        return createRMA(rmaId, orderId, reason, "Good"); 
+    } 
+ 
+    public ReturnRequest createRMA(String rmaId, String orderId, String reason, String 
+condition) { 
+        ReturnRequest request = new ReturnRequest(rmaId, orderId, reason, condition); 
+        requests.add(request); 
+        return request; 
+    } 
+ 
+    public void inspectItem(ReturnRequest request) { 
+        System.out.println("Inspecting item for RMA " + request.getRmaId() + "..."); 
+        if (request.getCondition().equalsIgnoreCase("Good")) { 
+            request.approve(); 
+            System.out.println("Item approved for return."); 
+        } else { 
+            request.deny(); 
+            System.out.println("Item denied for return."); 
+        } 
+    } 
+ 
+    public void processRefund(ReturnRequest request, double amount, boolean card) { 
+        if (request.getStatus().equals("APPROVED")) { 
+            Refund refund = card ? 
+                    new CardRefund("RF" + (refunds.size() + 1), request.getRmaId(), amount) : 
+                    new WalletRefund("RF" + (refunds.size() + 1), request.getRmaId(), amount); 
+ 
+            refund.processRefund(); 
+            refunds.add(refund); 
+            request.refund(); 
+        } else { 
+            System.out.println("Refund cannot be processed. Current status: " + 
+request.getStatus()); 
+        } 
+    } 
+ 
+    public void loadOrder(Order order) { 
+        orders.add(order); 
+    } 
+ 
+    public void printSummary() { 
+        System.out.println("\n--- RMA & Refund Summary ---"); 
+        for (ReturnRequest r : requests) { 
+            r.displayRequest(); 
+        } 
+    } 
+} 
+ 
+ 
+ 
+ 
+ 
+ 
+Class RMAppMain: 
+package rma; 
+import java.util.*; 
+public class RMAppMain { 
+    public static void main(String[] args) { 
+        RMAService service = new RMAService(); 
+        Order order1 = new Order("O1", "Basser", Arrays.asList("Phone", "Charger"), 15000, 
+new Date()); 
+        service.loadOrder(order1); 
+        order1.displayOrder(); 
+        ReturnRequest r1 = service.createRMA("RMA1", "O1", "Not working", "Good"); 
+        r1.displayRequest(); 
+        service.inspectItem(r1); 
+        service.processRefund(r1, 15000, true); 
+        service.printSummary(); 
+    } 
+} 
