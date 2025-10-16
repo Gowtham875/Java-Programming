@@ -1,555 +1,299 @@
-packagejavaAssignment; 
-importjava.time.LocalDate;
-importjava.time.format.DateTimeFormatter;
-importjava.util.*;
-public class GymApp
+package assignment; import java.time.LocalDate; import java.time.format.DateTimeParseException; import java.time.temporal.ChronoUnit;
+import java.util.*;
+public class GymApp { public static void main(String[] args) { GymSystem system = new GymSystem(); system.seedSampleData();
+ 
+system.runMenu();
+} } abstract class Person { protected int id; protected String name; protected String phone; protected String email; public Person(int id, String name, String phone, String email) { this.id = id; this.name = name; this.phone = phone; this.email = email; }
+public int getId() { return id; } public String getName() { return name; } public String getPhone() { return phone; } public String getEmail() { return email; }
+public String getDetails() {
+return String.format("%d: %s (phone=%s, email=%s)", id, name, phone, email);
+} } class Member extends Person { private static int NEXT = 1; private int membershipId; private List<Subscription> subscriptions = new ArrayList<>(); private List<AttendanceRecord> attendance = new ArrayList<>(); public Member(String name, String phone, String email) { super(generateMembershipId(), name, phone, email); this.membershipId = this.id;
+}
+private static int generateMembershipId() {
+return NEXT++;
+}
+public void addSubscription(Subscription s) {
+subscriptions.add(s);
+}
+List<Subscription> getSubscriptions() { return subscriptions; }
+public List<AttendanceRecord> getAttendance() { return attendance; }
+public void addAttendance(AttendanceRecord ar) { attendance.add(ar);
+}
+public int getMembershipId() { return membershipId; }
+@Override
+public String getDetails() {
+return String.format("Member %d: %s (phone:%s)", membershipId, name, phone);
+} } class Trainer extends Person { private static int NEXT = 1; private int trainerId; private String specialty;
+public Trainer(String name, String phone, String email, String specialty) {
+super(generateId(), name, phone, email);
+this.trainerId = this.id; this.specialty = specialty;
+} private static int generateId() { return NEXT++; } public String getSpecialty() { return specialty; }
+} class Plan { private static int NEXT = 1; private int planId; private String name; private double pricePerCycle; private int cycleDays; private double taxPercent; private double latePenalty;
+public Plan(String name, double pricePerCycle, int cycleDays, double taxPercent, double latePenalty) { this.planId = NEXT++; this.name = name;
+this.pricePerCycle = pricePerCycle; this.cycleDays = cycleDays; this.taxPercent = taxPercent; this.latePenalty = latePenalty;
+} public int getPlanId() { return planId; } public String getName() { return name; }
+public double getPricePerCycle() { return pricePerCycle; } public int getCycleDays() { return cycleDays; } public double getTaxPercent() { return taxPercent; } public double getLatePenalty() { return latePenalty; }
+@Override public String toString() {
+return String.format("%d: %s (₹%.2f per %d days, tax=%.2f%%, latePenalty=₹%.2f)",
+planId, name, pricePerCycle, cycleDays, taxPercent, latePenalty);
+} } class Subscription { private static int NEXT = 1; private int subscriptionId; private Member member; private Plan plan; private LocalDate startDate; private LocalDate endDate;
+public Subscription(Member member, Plan plan, LocalDate startDate)
+{ this.subscriptionId = NEXT++; this.member = member; this.plan = plan; this.startDate = startDate; this.endDate =
+startDate.plusDays(plan.getCycleDays()).minusDays(1);
+} public int getSubscriptionId() { return subscriptionId; } public Member getMember() { return member; }
+Plan getPlan() { return plan; }
+public LocalDate getStartDate() { return startDate; } public LocalDate getEndDate() { return endDate; } public boolean isActiveOn(LocalDate date) { return (date != null) && ( !date.isBefore(startDate)
+&& !date.isAfter(endDate) );
+} public boolean isActiveNow() { return isActiveOn(LocalDate.now());
+}
+public void renew(LocalDate renewDate) { LocalDate renewFrom;
+if (renewDate.isBefore(endDate) || renewDate.isEqual(endDate)) {
+renewFrom = endDate.plusDays(1);
+} else {
+renewFrom = renewDate;
+}
+this.startDate = renewFrom; this.endDate =
+renewFrom.plusDays(plan.getCycleDays()).minusDays(1);
+} @Override public String toString() {
+return String.format("Subscription %d -> Member %d | Plan %s | %s to %s (Active now: %s)",
+subscriptionId, member.getMembershipId(), plan.getName(), startDate, endDate, isActiveNow());
+} } class AttendanceRecord { private static int NEXT = 1;
+private int attendanceId; private Member member; private LocalDate date; private String notes;
+public AttendanceRecord(Member m, LocalDate date, String notes) { this.attendanceId = NEXT++;
+this.member = m; this.date = date; this.notes = notes;
+} public int getAttendanceId() { return attendanceId; } public Member getMember() { return member; } public LocalDate getDate() { return date; }
+@Override public String toString() {
+return String.format("Attendance[%d] Member:%d on %s %s",
+attendanceId, member.getMembershipId(), date,
+(notes==null?"":"("+notes+")"));
+}} class Invoice { private static int NEXT = 1; private int invoiceId; private Subscription subscription; private LocalDate issueDate; private double subtotal; private double tax; private double penalty; private double total; private boolean isPaid;
+public Invoice(Subscription subscription, LocalDate issueDate) {
+this.invoiceId = NEXT++; this.subscription = subscription; this.issueDate = issueDate; calculateTotals(); this.isPaid = false;
+}
+public int getInvoiceId() { return invoiceId; } public Subscription getSubscription() { return subscription; } public LocalDate getIssueDate() { return issueDate; } public boolean isPaid() { return isPaid; } public void markPaid() { this.isPaid = true; } public double getTotal() { return total; } void calculateTotals() {
+double price = subscription.getPlan().getPricePerCycle(); subtotal = price;
+tax = subtotal * subscription.getPlan().getTaxPercent() / 100.0; if (issueDate.isAfter(subscription.getEndDate())) {
+penalty = subscription.getPlan().getLatePenalty();
+} else { penalty = 0.0;
+}
+total = subtotal + tax + penalty;
+}
+public void printInvoiceShort() {
+System.out.printf("Invoice %d | Member %d | Plan %s | Issue: %s |
+Total: ₹%.2f | Paid: %s\n", invoiceId, subscription.getMember().getMembershipId(), subscription.getPlan().getName(), issueDate, total, isPaid ?
+"YES":"NO");
+}
+public String fullInvoiceString() { return String.format(
+"Invoice %d\nMember: %s\nPlan: %s\nCycle: %s to %s\nSubtotal: ₹%.2f\nTax: ₹%.2f\nPenalty: ₹%.2f\nTOTAL: ₹%.2f\nStatus: %s\n", invoiceId, subscription.getMember().getDetails(), subscription.getPlan().getName(), subscription.getStartDate(), subscription.getEndDate(), subtotal, tax, penalty, total, isPaid ? "PAID":"UNPAID"
+);}}
+abstract class Payment { private static int NEXT = 1; protected int paymentId; protected Invoice invoice; protected double amount; protected LocalDate date;
+public Payment(Invoice invoice, double amount, LocalDate date) { this.paymentId = NEXT++; this.invoice = invoice; this.amount = amount;
+ 
+this.date = date;
+} public abstract boolean applyPayment(); public int getPaymentId() { return paymentId; } public Invoice getInvoice() { return invoice; } public double getAmount() { return amount; } public LocalDate getDate() { return date; }
+}
+class CashPayment extends Payment {
+public CashPayment(Invoice invoice, double amount, LocalDate date)
 {
-privatestatic finalScanner scanner=newScanner(System.in);
-private static final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-
-dd");
-privatestaticfinalMap<Integer,Member>members=newHashMap<>();
-privatestaticfinalMap<Integer,Trainer>trainers=newHashMap<>(); 
-privatestaticfinalMap<Integer,Plan>plans=newHashMap<>();
-privatestaticfinalMap<Integer,Subscription>subscriptions=newHashMap<>();
-privatestaticfinalMap<Integer,Invoice>invoices=newHashMap<>();
-privatestaticfinalMap<Integer,Payment>payments=newHashMap<>(); 
-privatestaticfinalMap<Integer,List<AttendanceRecord>>attendance=new
-HashMap<>();
-publicstaticvoidmain(String[]args){
-seedSampleData();
-while (true){ 
-printMenu();
-intchoice=readInt("Chooseoption:",1,9);
-switch(choice){
-case1->addMember();
-case2->addPlan();
-case 3 -> startOrRenewSubscription();
-case4->recordAttendance();
-case 5 -> generateInvoice();
-case 6 -> recordPayment();
-case7->displayMembers();
-case8->displayAttendanceSummary();
-case 9 -> { System.out.println("Exiting. Goodbye!"); return; }
-default ->System.out.println("Invalidoption.");
-}
-System.out.println();
-}
-}
-privatestatic voidprintMenu(){
-System.out.println("===GymMembership&BillingSystem===");
-System.out.println("1.AddMember");
-System.out.println("2.AddPlan"); 
+super(invoice, amount, date);
+} @Override public boolean applyPayment() { if (invoice.isPaid()) return false;
+if (Math.abs(amount - invoice.getTotal()) > 0.01) { return false; }
+invoice.markPaid(); return true;
+} } class CardPayment extends Payment { private String cardNumberMasked;
+public CardPayment(Invoice invoice, double amount, LocalDate date, String maskedCard) { super(invoice, amount, date); this.cardNumberMasked = maskedCard;
+} @Override public boolean applyPayment() { if (invoice.isPaid()) return false;
+if (Math.abs(amount - invoice.getTotal()) > 0.01) { return false; }
+invoice.markPaid();
+return true;
+} } class GymSystem { private Scanner sc = new Scanner(System.in); List<Member> members = new ArrayList<>();
+List<Plan> plans = new ArrayList<>();
+List<Subscription> subscriptions = new ArrayList<>();
+List<Invoice> invoices = new ArrayList<>();
+List<Payment> payments = new ArrayList<>(); List<Trainer> trainers = new ArrayList<>(); public void seedSampleData() { plans.add(new Plan("Monthly", 1500.0, 30, 18.0, 100.0)); plans.add(new Plan("Quarterly", 4000.0, 90, 18.0, 200.0)); plans.add(new Plan("Yearly", 15000.0, 365, 18.0, 500.0));
+Member m1 = new Member("Karpagam", "9876543210",
+"karpa@example.com"); members.add(m1);
+Subscription s = new Subscription(m1, plans.get(0),
+LocalDate.now().minusDays(10)); m1.addSubscription(s);
+subscriptions.add(s);
+} public void runMenu() { while (true) {
+System.out.println("\n=== Gym Membership & Billing ===");
+System.out.println("1. Add Member");
+System.out.println("2. Add Plan");
 System.out.println("3. Start or Renew Subscription");
-System.out.println("4.RecordAttendance"); 
-System.out.println("5.GenerateInvoice");
-System.out.println("6.RecordPayment"); 
-System.out.println("7. Display Members & Subscriptions");
-System.out.println("8.DisplayAttendanceSummary"); 
-System.out.println("9.Exit");
+System.out.println("4. Record Attendance");
+System.out.println("5. Generate Invoice");
+System.out.println("6. Record Payment");
+System.out.println("7. Display Members");
+System.out.println("8. Display Invoices");
+System.out.println("9. Exit");
+System.out.print("Choose (1-9): ");
+String choice = sc.nextLine().trim();
+switch (choice) { case "1": addMember(); break; case "2": addPlan(); break; case "3": startOrRenewSubscription(); break; case "4": recordAttendance(); break; case "5": generateInvoice(); break; case "6": recordPayment(); break; case "7": displayMembers(); break; case "8": displayInvoices(); break; case "9": System.out.println("Bye."); return; default: System.out.println("Invalid choice."); break;
 }
-privatestaticvoidaddMember(){ 
-System.out.println("AddMember:");
-Stringname=readNonEmptyString("Name:"); 
-Stringphone=readNonEmptyString("Phone:");
-Stringemail=readNonEmptyString("Email:"); 
-Memberm=newMember(name,phone,email);
-members.put(m.getId(),m); 
-System.out.println("Added:"+m);
+} }
+private void addMember() {
+System.out.println("-- Add Member --");
+System.out.print("Name: "); String name = nonEmpty("Name");
+System.out.print("Phone: "); String phone = nonEmpty("Phone");
+System.out.print("Email: "); String email = nonEmpty("Email");
+Member m = new Member(name, phone, email); members.add(m);
+System.out.println("Added " + m.getDetails());
 }
-privatestaticvoidaddPlan(){ 
-System.out.println("AddPlan:");
-Stringname=readNonEmptyString("Planname(e.g.,Monthly,Quarterly,Yearly):");
-intdurationDays=readInt("Durationindays(e.g.,30formonthly):",1,3650); 
-doubleprice=readDouble("Price(inINR):",0.0,1_000_000.0);
-doublepenaltyPercent=readDouble("Laterenewalpenaltypercent(e.g.,10for10%):",
-0.0,100.0);
-Planp=newPlan(name,durationDays,price,penaltyPercent);
-plans.put(p.getId(),p);
-System.out.println("AddedPlan:"+p);
+private void addPlan() {
+System.out.println("-- Add Plan --");
+System.out.print("Plan name: "); String name = nonEmpty("Plan name"); double price = readDouble("Price per cycle (e.g. 1500)"); int days = (int) readDouble("Cycle days (e.g. 30)"); double tax = readDouble("Tax percent (e.g. 18)"); double penalty = readDouble("Late penalty amount (flat)"); Plan p = new Plan(name, price, days, tax, penalty); plans.add(p);
+System.out.println("Added plan: " + p);
 }
-private static voidstartOrRenewSubscription() { 
-System.out.println("Start or Renew Subscription:");
-if(members.isEmpty()){System.out.println("Nomembersexist.Addmembersfirst.");
-return;}
-if(plans.isEmpty()){System.out.println("Noplansexist.Addplansfirst.");return;}
-Member member =chooseMember();
-Planplan=choosePlan();
-Subscription existing = findActiveSubscriptionForMember(member);
-LocalDatetoday=LocalDate.now();
-if (existing==null||!existing.isActiveOn(today)){
-booleanwasExpired=(existing!=null&&!existing.isActiveOn(today));
-if(wasExpired){
-System.out.println("Subscriptionwasexpired.Alatepenaltymayapplyper plan
-policy.");
+private void startOrRenewSubscription() {
+System.out.println("-- Start or Renew Subscription --");
+Member m = chooseMember(); if (m == null) return; Plan p = choosePlan(); if (p == null) return;
+LocalDate date = readDateOrToday("Enter start/renew date (yyyymm-dd) or press Enter for today: ");
+Optional<Subscription> activeOpt = m.getSubscriptions().stream() .filter(s -> s.getPlan().getPlanId() == p.getPlanId() && s.isActiveOn(date)) .findFirst();
+if (activeOpt.isPresent()) {
+System.out.println("Member already has an active subscription for this plan on that date: " + activeOpt.get()); return;
 }
-Subscriptionsub=newSubscription(member,plan,today); 
-subscriptions.put(sub.getId(),sub); 
-attendance.putIfAbsent(member.getId(),newArrayList<>()); 
-System.out.printf("Subscriptionstartedformember%s.Validuntil%s%n",
-member.getName(), sub.getEndDate().format(DF));
-System.out.println("Note:Generateinvoicenext(menuoption5)beforerecording
-payment.");
-}else{
-System.out.println("Memberhasanactivesubscription.Renewingwillextendfrom
-existingenddate"+existing.getEndDate().format(DF));
-existing.renew();
-System.out.printf("Subscription renewed. New validity: %s -%s%n",
-existing.getStartDate().format(DF),existing.getEndDate().format(DF));
+Subscription sub = new Subscription(m, p, date); m.addSubscription(sub); subscriptions.add(sub);
+System.out.println("Created subscription: " + sub);
 }
-}
-privatestaticvoidrecordAttendance(){ 
-System.out.println("RecordAttendance:");
-if (members.isEmpty()) { System.out.println("No members."); return; }
-Member member =chooseMember();
-LocalDatedate=readDate("Attendancedate(yyyy-MM-dd)[leaveblankfortoday]:",
-true);
-if(date==null)date=LocalDate.now();
-Subscription active = findActiveSubscriptionForMember(member);
-if(active==null||!active.isActiveOn(date)){
-System.out.println("Cannot record attendance: member does not have an active
-subscriptionon"+date.format(DF));
+private void recordAttendance() {
+System.out.println("-- Record Attendance --");
+Member m = chooseMember(); if (m == null) return;
+LocalDate date = readDateOrToday("Attendance date (yyyy-mm-dd) or Enter for today: ");
+boolean hasActive = m.getSubscriptions().stream().anyMatch(s -> s.isActiveOn(date)); if (!hasActive) {
+System.out.println("ERROR: Member has no active subscription on "
++ date + ". Cannot record attendance.");
 return;
 }
-Stringnotes=readString("Notes(optional):");
-AttendanceRecordar=newAttendanceRecord(member,date,notes); 
-attendance.computeIfAbsent(member.getId(), k -> new ArrayList<>()).add(ar);
-System.out.println("Attendancerecorded:" +ar);
+System.out.print("Notes (optional): ");
+String notes = sc.nextLine().trim();
+AttendanceRecord ar = new AttendanceRecord(m, date, notes); m.addAttendance(ar);
+System.out.println("Recorded: " + ar);
 }
-privatestaticvoidgenerateInvoice(){ 
-System.out.println("GenerateInvoice:");
-if(subscriptions.isEmpty()){System.out.println("Nosubscriptionsexist.");return;}
-Subscriptionsub=chooseSubscription();
-Invoice inv = Invoice.createForSubscription(sub);
-invoices.put(inv.getId(),inv); 
-System.out.println("Invoicegenerated:"); 
-System.out.println(inv.detailedString());
+private void generateInvoice() {
+System.out.println("-- Generate Invoice --"); System.out.println("Choose subscription to invoice:"); if (subscriptions.isEmpty()) {
+System.out.println("No subscriptions in system."); return;
 }
-privatestaticvoidrecordPayment(){ 
-System.out.println("RecordPayment:");
-if(invoices.isEmpty()){System.out.println("Noinvoicesexist.Generateaninvoice
-first."); return;}
-Invoiceinvoice=chooseInvoice();
-if(invoice.isPaid()){
-System.out.println("Invoicealready paid.");
-return;
+Subscription s = chooseSubscription(); if (s == null) return;
+Invoice inv = new Invoice(s, LocalDate.now());
+invoices.add(inv);
+System.out.println("Generated invoice:");
+System.out.println(inv.fullInvoiceString());
 }
-double amountDue = invoice.getTotal() -invoice.getAmountPaid();
-System.out.printf("Amountdue:%.2f%n",amountDue);
-double amount = readDouble(String.format("Enter payment amount (<= %.2f): ",
-amountDue),0.01,amountDue);
-String method = readNonEmptyString("Payment method (Cash/Card/UPI): ");
-Paymentp=newPayment(invoice,amount,LocalDate.now(),method); 
-payments.put(p.getId(),p);
-invoice.applyPayment(p); 
-System.out.println("Paymentrecorded:"+p);
-System.out.println("Updatedinvoicestatus:");
-System.out.println(invoice.detailedString());
+private void recordPayment() {
+System.out.println("-- Record Payment --"); if (invoices.isEmpty()) {
+System.out.println("No invoices available. Generate invoice first."); return;
 }
-privatestaticvoiddisplayMembers(){ 
-System.out.println("Members & Subscriptions:");
+Invoice inv = chooseInvoice(); if (inv == null) return; if (inv.isPaid()) {
+System.out.println("Invoice already paid."); return;
+}
+System.out.println("Invoice total: ₹" + String.format("%.2f", inv.getTotal()));
+System.out.print("Payment mode (cash/card): ");
+String mode = sc.nextLine().trim().toLowerCase(); double amount = readDouble("Enter amount to pay (exact amount required): ");
+Payment pmt = null; if (mode.equals("cash")) {
+pmt = new CashPayment(inv, amount, LocalDate.now());
+} else if (mode.equals("card")) {
+System.out.print("Enter last 4 digits of card: ");
+String last4 = sc.nextLine().trim();
+pmt = new CardPayment(inv, amount, LocalDate.now(), "****" + last4);
+} else {
+System.out.println("Unknown payment mode."); return; }
+boolean ok = pmt.applyPayment(); if (ok) {
+payments.add(pmt);
+System.out.println("Payment recorded (id " + pmt.getPaymentId() +
+"). Invoice marked PAID.");
+} else {
+System.out.println("Payment failed (amount mismatch or invoice already paid).");
+} } private void displayMembers() { System.out.println("-- Members --");
 if (members.isEmpty()) { System.out.println("No members."); return; }
-for(Memberm:members.values()){
-System.out.println(m);
-Subscription s = findActiveSubscriptionForMember(m);
-if(s != null){
-System.out.println(" Activesubscription:"+s.briefString());
-}else{
-System.out.println("Noactivesubscription.");
+for (Member m : members) {
+System.out.println(m.getDetails()); System.out.println(" Subscriptions:"); if (m.getSubscriptions().isEmpty()) System.out.println(" none"); else m.getSubscriptions().forEach(s -> System.out.println(" " + s)); System.out.println(" Attendance summary (" + m.getAttendance().size() + " records)");
+m.getAttendance().forEach(a -> System.out.println(" " + a));
+} } private void displayInvoices() { System.out.println("-- Invoices --");
+if (invoices.isEmpty()) { System.out.println("No invoices."); return; } for (Invoice inv : invoices) {
+inv.printInvoiceShort();
 }
-List<Invoice> invs = invoicesForMember(m);
-if(!invs.isEmpty()){
-System.out.println("Invoices:");
-for (Invoiceinv:invs){
-System.out.printf(" %s-Paid:%s-Total:%.2f%n",inv.briefString(),
-inv.isPaid()?"YES":"NO",inv.getTotal());
+System.out.print("View full invoice id (or Enter to return): ");
+String line = sc.nextLine().trim(); if (!line.isEmpty()) {
+try {
+int id = Integer.parseInt(line); invoices.stream().filter(i -> i.getInvoiceId() == id).findFirst()
+.ifPresent(i -> System.out.println(i.fullInvoiceString()));
+} catch (NumberFormatException e) {}
+} }
+private Member chooseMember() { if (members.isEmpty()) {
+System.out.println("No members present. Add a member first."); return null;
 }
-}
-}
-}
-privatestaticvoiddisplayAttendanceSummary() { 
-System.out.println("Attendance Summary per Member:");
-if(attendance.isEmpty()){System.out.println("Noattendancerecords.");return;}
-for(Memberm:members.values()){
-List<AttendanceRecord> list = attendance.getOrDefault(m.getId(),
-Collections.emptyList());
-if(list.isEmpty())continue;
-System.out.printf("%s(%drecords):%n",m.getName(),list.size());
-//showlast5entries
-list.stream()
-.sorted(Comparator.comparing(AttendanceRecord::getDate).reversed())
-.limit(10)
-.forEach(ar -> System.out.printf(" %s -%s%n", ar.getDate().format(DF),
-ar.getNotes()));
-}
-}
-privatestatic Member chooseMember() {
-while (true){
 System.out.println("Members:");
-members.values().forEach(m -> System.out.printf(" %d) %s%n", m.getId(), m));
-intid=readInt("Entermemberid:",Integer.MIN_VALUE,Integer.MAX_VALUE);
-if(members.containsKey(id))returnmembers.get(id); 
-System.out.println("Invalidmember id.Tryagain.");
+members.forEach(m -> System.out.println(" " + m.getMembershipId()
++ ": " + m.getName()));
+System.out.print("Enter member id: "); String s = sc.nextLine().trim(); try {
+int id = Integer.parseInt(s);
+for (Member m : members) if (m.getMembershipId() == id) return m;
+System.out.println("Member not found."); return null;
+} catch (NumberFormatException e) {
+System.out.println("Invalid id.");
+return null;
+} } private Plan choosePlan() { if (plans.isEmpty()) {
+System.out.println("No plans present. Add a plan first."); return null;
 }
-}
-privatestaticPlanchoosePlan(){
-while (true){
 System.out.println("Plans:");
-plans.values().forEach(p->System.out.printf("%d)%s%n",p.getId(),p)); 
-intid=readInt("Enterplanid:",Integer.MIN_VALUE,Integer.MAX_VALUE);
-if (plans.containsKey(id)) return plans.get(id);
-System.out.println("Invalidplanid.Tryagain.");
+plans.forEach(p -> System.out.println(" " + p));
+System.out.print("Enter plan id: "); String s = sc.nextLine().trim(); try {
+int id = Integer.parseInt(s); for (Plan p : plans) if (p.getPlanId() == id) return p;
+System.out.println("Plan not found."); return null;
+} catch (NumberFormatException e) {
+System.out.println("Invalid plan id."); return null;
+} }
+private Subscription chooseSubscription() { if (subscriptions.isEmpty()) {
+System.out.println("No subscriptions.");
+return null; }
+for (Subscription s : subscriptions) {
+System.out.printf(" %d: Member %d | Plan %s | %s to %s |
+Active:%s\n",
+s.getSubscriptionId(), s.getMember().getMembershipId(),
+s.getPlan().getName(),
+s.getStartDate(), s.getEndDate(), s.isActiveNow());
+}
+System.out.print("Enter subscription id: ");
+String in = sc.nextLine().trim(); try {
+int id = Integer.parseInt(in);
+for (Subscription s : subscriptions) if (s.getSubscriptionId() == id) return s;
+System.out.println("Subscription not found.");
+return null;
+} catch (NumberFormatException e) {
+System.out.println("Invalid id.");
+return null;
 }
 }
-private static Subscription chooseSubscription() {
-while (true){
-System.out.println("Subscriptions:");
-subscriptions.values().forEach(s -> System.out.printf(" %d) %s%n", s.getId(),
-s.briefString()));
-intid=readInt("Entersubscriptionid:",Integer.MIN_VALUE,
-Integer.MAX_VALUE);
-if (subscriptions.containsKey(id)) return subscriptions.get(id);
-System.out.println("Invalidsubscriptionid.");
+private Invoice chooseInvoice() { for (Invoice i : invoices) {
+System.out.printf(" %d: Member %d | Total ₹%.2f | Paid:%s\n",
+i.getInvoiceId(),
+i.getSubscription().getMember().getMembershipId(), i.getTotal(),
+i.isPaid() ? "Y":"N");
 }
-}
-privatestaticInvoicechooseInvoice(){
-while (true){
-System.out.println("Invoices:");
-invoices.values().forEach(i -> System.out.printf(" %d) %s%n", i.getId(),
-i.briefString()));
-intid=readInt("Enterinvoiceid:",Integer.MIN_VALUE,Integer.MAX_VALUE);
-if(invoices.containsKey(id)) returninvoices.get(id); 
-System.out.println("Invalidinvoiceid.");
-}
-}
-private static Subscription findActiveSubscriptionForMember(Member m) {
-LocalDatetoday=LocalDate.now()
-returnsubscriptions.values().stream()
-.filter(s->s.getMember().equals(m))
-.max(Comparator.comparing(Subscription::getEndDate))
-.filter(s->s.isActiveOn(today))
-.orElse(null);
-}
-private static List<Invoice>invoicesForMember(Member m) {
-List<Invoice>list=newArrayList<>();
-for (Invoice inv: invoices.values()){
-if (inv.getSubscription().getMember().equals(m)) list.add(inv);
-}
-list.sort(Comparator.comparing(Invoice::getCreatedAt).reversed());
-returnlist;
-}
-privatestaticintreadInt(Stringprompt,intmin,intmax){
-while (true){
-System.out.print(prompt);
-Stringline=scanner.nextLine().trim();
-try{
-intv=Integer.parseInt(line);
-if(v<min|| v>max){
-System.out.printf("Enter value between %d and %d%n", min, max);
-continue;
-}
-returnv;
-} catch(NumberFormatExceptione){ 
-System.out.println("Invalid integer. Try again.");
-}
-}
-}
-privatestaticdoublereadDouble(Stringprompt,doublemin,doublemax){
-while (true){
-System.out.print(prompt);
-Stringline=scanner.nextLine().trim();
-try{
-double v= Double.parseDouble(line);
-if(v<min|| v>max){
-System.out.printf("Entervaluebetween%.2fand%.2f%n",min,max);
-continue;
-}
-returnv;
-} catch(NumberFormatExceptione){ 
-System.out.println("Invalid decimal number. Try again.");
-}
-}
-}
-privatestaticStringreadNonEmptyString(Stringprompt){
-while (true){
-System.out.print(prompt);
-Strings=scanner.nextLine().trim();
-if(!s.isEmpty()) returns;
-System.out.println("Valuecannotbeempty.");
-}
-}
-privatestaticStringreadString(Stringprompt){
-System.out.print(prompt);
-returnscanner.nextLine().trim();
-}
-private static String readNonEmptyName(String prompt){
-returnreadNonEmptyString(prompt);
-}
-privatestaticLocalDatereadDate(Stringprompt,booleanallowBlank){
-while (true){
-System.out.print(prompt);
-Strings=scanner.nextLine().trim();
-if(s.isEmpty()&&allowBlank)returnnull;
-try{
-returnLocalDate.parse(s,DF);
-} catch(Exception e){
-System.out.println("Invaliddateformat.Useyyyy-MM-dd.");
-}
-}
-}
-privatestaticvoidseedSampleData(){
-Planmonthly=newPlan("Monthly",30,1200.0,10.0);
-Planquarterly=newPlan("Quarterly",90,3300.0,8.0);
-Planyearly=newPlan("Yearly",365,12000.0,5.0);
-plans.put(monthly.getId(),monthly); 
-plans.put(quarterly.getId(),quarterly); 
-plans.put(yearly.getId(),yearly);
-Trainert=newTrainer("Ana","9876543210");
-trainers.put(t.getId(),t);
-Memberm1=newMember("SitaRam","9000000001","sita@example.com"); 
-Member m2 = new Member("Rahul Kumar", "9000000002", "rahul@example.com");
-members.put(m1.getId(),m1);
-members.put(m2.getId(), m2);
-Subscription s1 = new Subscription(m1, monthly, LocalDate.now().minusDays(5)); //
-started5daysago
-subscriptions.put(s1.getId(),s1); 
-attendance.put(m1.getId(),newArrayList<>());
-}
-staticclassMember{
-private static int counter = 1;
-privatefinalintid;
-private String name;
-private String phone;
-privateStringemail;
-public Member(String name, String phone, String email) { 
-this.id=counter++;
-this.name=name; 
-this.phone=phone;
-this.email=email;
-}
-publicintgetId(){returnid;}
-publicStringgetName(){returnname;} 
-publicStringgetPhone(){returnphone;}
-publicStringgetEmail(){returnemail;}
-publicvoidsetName(Stringname){this.name=name;} 
-publicvoidsetPhone(Stringphone){this.phone=phone;}
-publicvoidsetEmail(Stringemail){this.email=email;} 
-publicStringtoString(){
-returnString.format("%s(ID:%d,%s,%s)",name,id,phone,email);
-}
-publicbooleanequals(Objecto){
-if(!(oinstanceofMember))returnfalse;
-return((Member)o).id==this.id;
-}
-publicinthashCode() { returnObjects.hash(id);}
-}
-static class Trainer {
-privatestaticintcounter=1;
-privatefinalintid;
-privateStringname; 
-privateStringphone;
-publicTrainer(Stringname,Stringphone){
-this.id=counter++;
-this.name=name; 
-this.phone=phone;
-}
-publicintgetId(){returnid;}
-publicStringgetName() {returnname;}
-publicStringtoString(){
-returnString.format("%s(ID:%d,%s)",name,id,phone);
-}
-}
-staticclassPlan{
-privatestaticintcounter=1;
-privatefinalintid;
-privateStringname; 
-privateint durationDays;
-privatedoubleprice;
-privatedoublepenaltyPercent;
-publicPlan(Stringname,intdurationDays,doubleprice,doublepenaltyPercent){
-this.id=counter++;
-this.name=name; 
-this.durationDays =durationDays;
-this.price=price;
-this.penaltyPercent=penaltyPercent;
-}
-publicintgetId(){returnid;}
-publicStringgetName() {returnname;}
-publicintgetDurationDays(){returndurationDays;}
-publicdoublegetPrice(){returnprice;}
-publicdoublegetPenaltyPercent(){returnpenaltyPercent;}
-publicStringtoString(){
-returnString.format("%s(ID:%d)-%ddays-Price:%.2f-Penalty:%.1f%%",name,
-id,durationDays,price,penaltyPercent);
-}
-}
-staticclassSubscription{ 
-privatestaticintcounter=1;
-privatefinalintid;
-privatefinalMembermember;
-privatefinalPlanplan;
-privateLocalDatestartDate;
-privateLocalDateendDate; 
-privatebooleanactive;
-public Subscription(Member member, Plan plan, LocalDate startDate) {
-this.id=counter++;
-this.member=member; 
-this.plan=plan; 
-this.startDate=startDate;
-this.endDate = startDate.plusDays(plan.getDurationDays() -1);
-this.active=true;
-}
-publicintgetId(){returnid;}
-publicMembergetMember(){returnmember;}
-publicPlangetPlan(){returnplan;}
-publicLocalDategetStartDate(){returnstartDate;}
-publicLocalDategetEndDate(){returnendDate;} 
-publicbooleanisActive(){returnactive;}
-publicbooleanisActiveOn(LocalDatedate){
-return(date!=null) &&!date.isBefore(startDate) &&!date.isAfter(endDate);
-}
-publicvoidrenew() {
-if(isActiveOn(LocalDate.now())){
-LocalDatenewStart=endDate.plusDays(1);
-LocalDate newEnd = newStart.plusDays(plan.getDurationDays() -1);
-this.endDate=newEnd;
-}else{
-this.startDate=LocalDate.now();
-this.endDate = startDate.plusDays(plan.getDurationDays() -1);
-this.active=true;
-}
-}
-publicStringbriefString(){
-return String.format("Subscription[id=%d, plan=%s, member=%s, %s -%s]", id,
-plan.getName(), member.getName(), startDate.format(DF), endDate.format(DF));
-}
-publicStringtoString(){
-returnbriefString();
-}
-}
-static class AttendanceRecord {
-private static int counter = 1; 
-privatefinalintid;
-privatefinalMembermember;
-privatefinalLocalDatedate; 
-privatefinalStringnotes;
-public AttendanceRecord(Member member, LocalDate date, String notes) {
-this.id=counter++;
-this.member=member;
-this.date=date;
-this.notes = (notes== null||notes.isEmpty())?"-": notes;
-}
-publicintgetId(){returnid;}
-publicMembergetMember(){returnmember;}
-publicLocalDategetDate(){returndate;} 
-publicStringgetNotes(){returnnotes;}
-publicStringtoString(){
-return String.format("Attendance[id=%d, member=%s, date=%s, notes=%s]", id,
-member.getName(),date.format(DF),notes);
-}
-}
-staticclassInvoice{
-privatestaticintcounter=1;
-privatefinalintid;
-privatefinal Subscriptionsubscription;
-privatefinalLocalDatecreatedAt;
-privatefinaldoublesubtotal; 
-privatefinaldoubletaxPercent; 
-privatefinaldoublepenalty; 
-privatedoubleamountPaid;
-privatestaticfinaldoubleDEFAULT_TAX_PERCENT=18.0;
-private Invoice(Subscription subscription, double subtotal, double penalty, double
-taxPercent){
-this.id=counter++; 
-this.subscription=subscription; 
-this.createdAt =LocalDate.now();
-this.subtotal=subtotal; 
-this.penalty=penalty; 
-this.taxPercent=taxPercent; 
-this.amountPaid=0.0;
-}
-public static Invoice createForSubscription(Subscription s) {
-doubleprice=s.getPlan().getPrice();
-doublepenalty=0.0;
-LocalDatetoday=LocalDate.now(); 
-boolean expired = !s.isActiveOn(today);
-if(expired){
-penalty=price*(s.getPlan().getPenaltyPercent()/100.0);
-}
-doublesubtotal=price;
-returnnewInvoice(s, subtotal,penalty,DEFAULT_TAX_PERCENT);
-}
-publicintgetId(){returnid;}
-publicSubscriptiongetSubscription(){returnsubscription;}
-publicLocalDategetCreatedAt(){returncreatedAt;}
-publicdoublegetSubtotal(){returnsubtotal;} 
-publicdoublegetTaxPercent(){returntaxPercent;}
-publicdoublegetPenalty(){returnpenalty;}
-publicdoublegetAmountPaid(){returnamountPaid;}
-publicdoublegetTaxAmount(){
-return(subtotal+penalty) * taxPercent/100.0;
-}
-publicdoublegetTotal(){
-returnsubtotal+penalty + getTaxAmount();
-}
-publicdoublegetAmountDue(){ 
-return getTotal() -amountPaid;
-}
-publicbooleanisPaid() {
-returnMath.abs(getAmountDue())<0.0001;
-}
-publicvoid applyPayment(Payment p) {
-this.amountPaid+=p.getAmount();
-}
-publicStringbriefString(){
-return String.format("Invoice[id=%d, member=%s, plan=%s, total=%.2f, paid=%.2f,
-created=%s]", id, subscription.getMember().getName(), subscription.getPlan().getName(),
-getTotal(),amountPaid, createdAt.format(DF));
-}
-publicStringdetailedString(){
-returnString.format(
-"InvoiceID:%d%nMember:%s%nPlan:%s%nCycle:%s-%s%nSubtotal:
-%.2f%nPenalty:%.2f%nTax (%.1f%%):%.2f%nTotal:%.2f%nAmountPaid:%.2f%nStatus:
-%s",
-id, 
-subscription.getMember().getName(),
-subscription.getPlan().getName(),
-subscription.getStartDate().format(DF),subscription.getEndDate().format(DF),
-subtotal,
-penalty,
-taxPercent, 
-getTaxAmount(),
-getTotal(), 
-amountPaid,
-isPaid()?"PAID":"UNPAID"
-);
-}
-publicStringtoString(){
-returnbriefString();
-}
-}
-staticclassPayment{
-private static int counter = 1; 
-privatefinalintid;
-private final Invoice invoice;
-private final double amount;
-private final LocalDate date;
-privatefinalStringmethod;
-public Payment(Invoice invoice, double amount, LocalDate date, String method) {
-this.id=counter++;
-this.invoice=invoice; 
-this.amount=amount;
-this.date=date; 
-this.method=method;
-}
-publicintgetId(){returnid;}
-public InvoicegetInvoice(){returninvoice;}
-publicdoublegetAmount(){returnamount;}
-publicLocalDategetDate(){returndate;} 
-publicStringgetMethod(){returnmethod;} 
-publicStringtoString(){
-return String.format("Payment[id=%d, invoiceId=%d, amount=%.2f, date=%s,
-method=%s]",id,invoice.getId(),amount,date.format(DF),method);
-}
-}
-}
+System.out.print("Enter invoice id: "); String in = sc.nextLine().trim(); try {
+int id = Integer.parseInt(in); for (Invoice i : invoices) if (i.getInvoiceId() == id) return i;
+System.out.println("Invoice not found."); return null;
+} catch (NumberFormatException e) {
+System.out.println("Invalid id."); return null;
+} }
+private String nonEmpty(String label) { while (true) {
+String s = sc.nextLine().trim(); if (!s.isEmpty()) return s;
+System.out.print(label + " is required. Enter again: ");
+} }
+private double readDouble(String prompt) {
+while (true) {
+System.out.print(prompt + ": "); String line = sc.nextLine().trim(); try {
+double v = Double.parseDouble(line); if (v < 0) {
+System.out.println("Value must be >= 0"); continue; } return v;
+} catch (NumberFormatException e) {
+System.out.println("Invalid number. Try again.");
+}}}
+private LocalDate readDateOrToday(String prompt) {
+System.out.print(prompt); String line = sc.nextLine().trim(); if (line.isEmpty()) return LocalDate.now();
+try {
+return LocalDate.parse(line);
+} catch (DateTimeParseException e) {
+System.out.println("Invalid date format, using today.");
+return LocalDate.now();
+}}}
 
